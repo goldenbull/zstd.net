@@ -2,24 +2,27 @@ namespace zstd.net;
 
 /// <summary>
 /// Provides streaming decompression using Zstandard.
+/// internally, read bytes into _inputBytes, and decompress into _outputBytes
+/// then copy _outputBytes to the parameter of Read()
 /// </summary>
 public sealed class ZstdDecompressStream : Stream
 {
-    private IntPtr _dstream;
-    private bool _disposed;
-
     private readonly Stream _stream;
-    private readonly int _inputBufferSize;
-    private readonly int _outputBufferSize;
     private readonly bool _leaveOpen;
-    private readonly byte[] _inputBuffer;
-    private readonly byte[] _outputBuffer;
 
+    private readonly int _inputBytesSize;
+    private readonly byte[] _inputBytes;
+    private readonly int _outputBytesSize;
+    private readonly byte[] _outputBytes;
+
+    private IntPtr _dstream;
     private ZSTD_inBuffer _inBuffer;
     private ZSTD_outBuffer _outBuffer;
     private int _outputBufferPos;
     private int _outputBufferAvailable;
     private bool _endOfStream;
+
+    private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstdDecompressStream"/> class.
@@ -31,11 +34,11 @@ public sealed class ZstdDecompressStream : Stream
         _stream = stream ?? throw new ArgumentNullException(nameof(stream));
         _leaveOpen = leaveOpen;
 
-        // Use recommended buffer sizes
-        _inputBufferSize = (int)ZstdNative.ZSTD_DStreamInSize();
-        _outputBufferSize = (int)ZstdNative.ZSTD_DStreamOutSize();
-        _inputBuffer = new byte[_inputBufferSize];
-        _outputBuffer = new byte[_outputBufferSize];
+        // Use bigger buffer sizes to reduce native lib interop
+        _inputBytesSize = (int)ZstdNative.ZSTD_DStreamInSize() * 16;
+        _inputBytes = new byte[_inputBytesSize];
+        _outputBytesSize = (int)ZstdNative.ZSTD_DStreamOutSize() * 16;
+        _outputBytes = new byte[_outputBytesSize];
 
         _dstream = ZstdNative.ZSTD_createDStream();
         if (_dstream == IntPtr.Zero)
@@ -50,7 +53,8 @@ public sealed class ZstdDecompressStream : Stream
             ZstdNative.ZSTD_freeDStream(_dstream);
             _dstream = IntPtr.Zero;
             var errorCode = ZstdNative.ZSTD_getErrorCode(initResult);
-            throw new InvalidOperationException($"Failed to initialize decompression stream: {Zstd.GetErrorString(errorCode)}");
+            var errorString = Zstd.GetErrorString(errorCode);
+            throw new InvalidOperationException($"Failed to initialize decompression stream: {errorString}");
         }
 
         _outputBufferPos = 0;
@@ -89,14 +93,13 @@ public sealed class ZstdDecompressStream : Stream
             return 0;
 
         int totalBytesRead = 0;
-
         while (totalBytesRead < count && !_endOfStream)
         {
             // If we have data in the output buffer, copy it first
             if (_outputBufferAvailable > 0)
             {
                 int bytesToCopy = Math.Min(_outputBufferAvailable, count - totalBytesRead);
-                Array.Copy(_outputBuffer, _outputBufferPos, buffer, offset + totalBytesRead, bytesToCopy);
+                Array.Copy(_outputBytes, _outputBufferPos, buffer, offset + totalBytesRead, bytesToCopy);
                 _outputBufferPos += bytesToCopy;
                 _outputBufferAvailable -= bytesToCopy;
                 totalBytesRead += bytesToCopy;
@@ -121,13 +124,13 @@ public sealed class ZstdDecompressStream : Stream
             // Read more compressed data if needed
             if (_inBuffer.pos >= _inBuffer.size)
             {
-                int bytesRead = _stream.Read(_inputBuffer, 0, _inputBufferSize);
+                int bytesRead = _stream.Read(_inputBytes, 0, _inputBytesSize);
                 if (bytesRead == 0)
                 {
                     return false; // End of input stream
                 }
 
-                fixed (byte* inputPtr = _inputBuffer)
+                fixed (byte* inputPtr = _inputBytes)
                 {
                     _inBuffer.src = inputPtr;
                     _inBuffer.size = (nuint)bytesRead;
@@ -135,8 +138,8 @@ public sealed class ZstdDecompressStream : Stream
                 }
             }
 
-            fixed (byte* inputPtr = _inputBuffer)
-            fixed (byte* outputPtr = _outputBuffer)
+            fixed (byte* inputPtr = _inputBytes)
+            fixed (byte* outputPtr = _outputBytes)
             {
                 // Update input buffer pointer (in case it wasn't set above)
                 if (_inBuffer.src == null)
@@ -146,7 +149,7 @@ public sealed class ZstdDecompressStream : Stream
 
                 // Set up output buffer
                 _outBuffer.dst = outputPtr;
-                _outBuffer.size = (nuint)_outputBufferSize;
+                _outBuffer.size = (nuint)_outputBytesSize;
                 _outBuffer.pos = 0;
 
                 // Decompress
@@ -199,7 +202,7 @@ public sealed class ZstdDecompressStream : Stream
             {
                 if (!_leaveOpen)
                 {
-                    _stream?.Dispose();
+                    _stream.Dispose();
                 }
             }
 

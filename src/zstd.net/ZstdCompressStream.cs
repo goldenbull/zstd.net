@@ -2,21 +2,22 @@ namespace zstd.net;
 
 /// <summary>
 /// Provides streaming compression using Zstandard.
+/// user will pass the input bytes when calling Write() method
+/// internally, we use _inBuffer and _outBuffer to point to the input bytes and _outBytes,
+/// then invoke native lib to do the compression.
 /// </summary>
 public sealed class ZstdCompressStream : Stream
 {
-    private IntPtr _cstream;
-    private bool _disposed;
-
     private readonly Stream _stream;
     private readonly int _bufferSize;
     private readonly bool _leaveOpen;
-    private readonly int _compressionLevel;
-    private readonly int _nThreads;
-    private readonly byte[] _outputBuffer;
+    private readonly byte[] _outBytes;
 
+    private IntPtr _cstream;
     private ZSTD_inBuffer _inBuffer;
     private ZSTD_outBuffer _outBuffer;
+
+    private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZstdCompressStream"/> class.
@@ -31,14 +32,12 @@ public sealed class ZstdCompressStream : Stream
     {
         _stream = stream ?? throw new ArgumentNullException(nameof(stream));
 
-        if (bufferSize <= 0)
-            throw new ArgumentOutOfRangeException(nameof(bufferSize), "Buffer size must be positive");
+        if (bufferSize <= 8192)
+            throw new ArgumentOutOfRangeException(nameof(bufferSize), "Buffer size must be bigger then 8K");
 
         _bufferSize = bufferSize;
         _leaveOpen = leaveOpen;
-        _compressionLevel = compressionLevel;
-        _nThreads = nThreads;
-        _outputBuffer = new byte[bufferSize];
+        _outBytes = new byte[bufferSize];
 
         _cstream = ZstdNative.ZSTD_createCStream();
         if (_cstream == IntPtr.Zero)
@@ -126,43 +125,14 @@ public sealed class ZstdCompressStream : Stream
         unsafe
         {
             fixed (byte* inputPtr = &buffer[offset])
-            fixed (byte* outputPtr = _outputBuffer)
             {
                 // Set up input buffer
                 _inBuffer.src = inputPtr;
                 _inBuffer.size = (nuint)count;
                 _inBuffer.pos = 0;
 
-                // Set up output buffer
-                _outBuffer.dst = outputPtr;
-                _outBuffer.size = (nuint)_bufferSize;
-
                 // Compress until all input is consumed
-                bool finished;
-                do
-                {
-                    // Reset output buffer position
-                    _outBuffer.pos = 0;
-
-                    // Compress with ZSTD_e_continue mode
-                    var outBuffer = _outBuffer;
-                    var inBuffer = _inBuffer;
-                    nuint remaining = ZstdNative.ZSTD_compressStream2(_cstream, &outBuffer, &inBuffer, ZSTD_EndDirective.ZSTD_e_continue);
-                    if (ZstdNative.ZSTD_isError(remaining) != 0)
-                    {
-                        var errorCode = ZstdNative.ZSTD_getErrorCode(remaining);
-                        throw new InvalidOperationException($"Compression failed: {Zstd.GetErrorString(errorCode)}");
-                    }
-
-                    // Write compressed output to the underlying stream
-                    if (_outBuffer.pos > 0)
-                    {
-                        _stream.Write(_outputBuffer, 0, (int)_outBuffer.pos);
-                    }
-
-                    // We're finished when we've consumed all the input
-                    finished = (_inBuffer.pos == _inBuffer.size);
-                } while (!finished);
+                CompressAndWriteLoop(ZSTD_EndDirective.ZSTD_e_continue);
 
                 // Verify all input was consumed
                 if (_inBuffer.pos != _inBuffer.size)
@@ -185,12 +155,12 @@ public sealed class ZstdCompressStream : Stream
         {
             if (disposing)
             {
-                // End the compression stream with ZSTD_e_end
+                // End the compression frame with ZSTD_e_end
                 FlushInternal(ZSTD_EndDirective.ZSTD_e_end);
 
                 if (!_leaveOpen)
                 {
-                    _stream?.Dispose();
+                    _stream.Dispose();
                 }
             }
 
@@ -210,47 +180,68 @@ public sealed class ZstdCompressStream : Stream
     {
         unsafe
         {
-            fixed (byte* outputPtr = _outputBuffer)
-            {
-                // Set up input buffer (empty for flush/end)
-                _inBuffer.src = null;
-                _inBuffer.size = 0;
-                _inBuffer.pos = 0;
+            // Set up input buffer (empty for flush/end)
+            _inBuffer.src = null;
+            _inBuffer.size = 0;
+            _inBuffer.pos = 0;
 
+            // Keep flushing/ending until remaining == 0
+            CompressAndWriteLoop(endDirective);
+
+            // Flush the underlying stream
+            _stream.Flush();
+        }
+    }
+
+    /// <summary>
+    /// compress all data in _inBuffer into _outBuffer
+    /// </summary>
+    private void CompressAndWriteLoop(ZSTD_EndDirective endDirective)
+    {
+        unsafe
+        {
+            fixed (byte* outputPtr = _outBytes)
+            {
                 // Set up output buffer
                 _outBuffer.dst = outputPtr;
                 _outBuffer.size = (nuint)_bufferSize;
 
-                // Keep flushing/ending until remaining == 0
-                nuint remaining;
+                bool finished;
                 do
                 {
                     // Reset output buffer position
                     _outBuffer.pos = 0;
 
-                    // Flush or end based on the directive
+                    // Compress with the specified directive
                     var outBuffer = _outBuffer;
                     var inBuffer = _inBuffer;
-                    remaining = ZstdNative.ZSTD_compressStream2(_cstream, &outBuffer, &inBuffer, endDirective);
+                    var remaining = ZstdNative.ZSTD_compressStream2(_cstream, &outBuffer, &inBuffer, endDirective);
                     _outBuffer = outBuffer;
                     _inBuffer = inBuffer;
 
                     if (ZstdNative.ZSTD_isError(remaining) != 0)
                     {
                         var errorCode = ZstdNative.ZSTD_getErrorCode(remaining);
-                        var operation = endDirective == ZSTD_EndDirective.ZSTD_e_end ? "End compression" : "Flush";
-                        throw new InvalidOperationException($"{operation} failed: {Zstd.GetErrorString(errorCode)}");
+                        throw new InvalidOperationException($"{endDirective} failed: {Zstd.GetErrorString(errorCode)}");
                     }
 
-                    // Write output to the underlying stream
+                    // Write compressed output to the underlying stream
                     if (_outBuffer.pos > 0)
                     {
-                        _stream.Write(_outputBuffer, 0, (int)_outBuffer.pos);
+                        _stream.Write(_outBytes, 0, (int)_outBuffer.pos);
                     }
-                } while (remaining > 0);
 
-                // Flush the underlying stream
-                _stream.Flush();
+                    if (endDirective == ZSTD_EndDirective.ZSTD_e_continue)
+                    {
+                        // For ZSTD_e_continue (Write), continue until all input is consumed
+                        finished = _inBuffer.pos >= _inBuffer.size;
+                    }
+                    else
+                    {
+                        // For ZSTD_e_flush/ZSTD_e_end (Flush/Dispose), continue until remaining == 0
+                        finished = remaining == 0;
+                    }
+                } while (!finished);
             }
         }
     }
