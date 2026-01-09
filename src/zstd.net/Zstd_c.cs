@@ -149,15 +149,62 @@ public unsafe struct ZSTD_outBuffer
 
 internal static unsafe partial class ZstdNative
 {
-    private const string LibraryName = "zstd";
+    private const string LibraryName = "libzstd";
+
+    // ===== runtime library lookup =====
+    static ZstdNative()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(ZstdNative).Assembly, DllImportResolver);
+    }
+
+    private static IntPtr DllImportResolver(string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (libraryName != LibraryName)
+        {
+            return IntPtr.Zero;
+        }
+
+        var arch = RuntimeInformation.ProcessArchitecture switch
+                   {
+                       Architecture.X86 => "x86",
+                       Architecture.X64 => "x64",
+                       Architecture.Arm => "arm",
+                       Architecture.Arm64 => "arm64",
+                       _ => throw new PlatformNotSupportedException(),
+                   };
+
+        string? ext;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            ext = "dll";
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            ext = "dylib";
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            ext = "so";
+        else
+            throw new PlatformNotSupportedException();
+
+        // Try platform-specific subdirectory first
+        var fullpath = Path.Combine(AppContext.BaseDirectory, "native", arch, $"{libraryName}.{ext}");
+        if (File.Exists(fullpath) && NativeLibrary.TryLoad(fullpath, out var handle))
+        {
+            return handle;
+        }
+
+        // Fall back to default search
+        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var defaultHandle))
+        {
+            return defaultHandle;
+        }
+
+        return IntPtr.Zero;
+    }
 
     // ===== Constants =====
     public const int ZSTD_VERSION_MAJOR = 1;
     public const int ZSTD_VERSION_MINOR = 6;
     public const int ZSTD_VERSION_RELEASE = 0;
 
-    public const int ZSTD_VERSION_NUMBER =
-        (ZSTD_VERSION_MAJOR * 100 * 100 + ZSTD_VERSION_MINOR * 100 + ZSTD_VERSION_RELEASE);
+    public const int ZSTD_VERSION_NUMBER = (ZSTD_VERSION_MAJOR * 100 * 100 + ZSTD_VERSION_MINOR * 100 + ZSTD_VERSION_RELEASE);
 
     public const int ZSTD_CLEVEL_DEFAULT = 3;
 
