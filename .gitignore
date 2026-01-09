@@ -416,3 +416,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# macos
+.DS_Store
+CLAUDE.md
+
+# IDE
+.idea/
