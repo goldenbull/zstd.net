@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zstd.net", "zstd.net\zstd.net.csproj", "{9DB3363C-03D7-4E7F-994B-A76179DEBADF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "zstd.net.tests", "tests\zstd.net.tests.csproj", "{F7BB109A-E5DB-4FCF-9B23-36B17F70E282}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9DB3363C-03D7-4E7F-994B-A76179DEBADF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DB3363C-03D7-4E7F-994B-A76179DEBADF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DB3363C-03D7-4E7F-994B-A76179DEBADF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DB3363C-03D7-4E7F-994B-A76179DEBADF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F7BB109A-E5DB-4FCF-9B23-36B17F70E282}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7BB109A-E5DB-4FCF-9B23-36B17F70E282}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7BB109A-E5DB-4FCF-9B23-36B17F70E282}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7BB109A-E5DB-4FCF-9B23-36B17F70E282}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
