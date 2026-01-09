@@ -232,6 +232,9 @@ public sealed class ZstdCompressStream : Stream
                     var outBuffer = _outBuffer;
                     var inBuffer = _inBuffer;
                     remaining = ZstdNative.ZSTD_compressStream2(_cstream, &outBuffer, &inBuffer, endDirective);
+                    _outBuffer = outBuffer;
+                    _inBuffer = inBuffer;
+
                     if (ZstdNative.ZSTD_isError(remaining) != 0)
                     {
                         var errorCode = ZstdNative.ZSTD_getErrorCode(remaining);
