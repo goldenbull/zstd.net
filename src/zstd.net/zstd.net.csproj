@@ -1,14 +1,47 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>zstd.net</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>goldenbull</Authors>
+    <Company>goldenbull</Company>
+    <Description>.NET wrapper for the Zstandard (zstd) compression native library in Windows, Linux, and macOS. Multithread compression is enabled. Supports x64 and arm64 only, but can easily add x86 and arm support</Description>
+    <PackageTags>zstd;zstandard;compression;decompression;native;multi-thread</PackageTags>
+    <PackageProjectUrl>https://github.com/goldenbull/zstd.net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/goldenbull/zstd.net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Include README in package -->
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+
+    <!-- Native libraries for Windows x64 -->
+    <None Include="native\x64\libzstd.dll" Pack="true" PackagePath="runtimes\win-x64\native\" />
+
+    <!-- Native libraries for Linux x64 -->
+    <None Include="native\x64\libzstd.so" Pack="true" PackagePath="runtimes\linux-x64\native\" />
+
+    <!-- Native libraries for macOS ARM64 -->
+    <None Include="native\arm64\libzstd.dylib" Pack="true" PackagePath="runtimes\osx-arm64\native\" />
+
+    <!-- Copy to output directory for development -->
     <None Update="native\arm64\libzstd.dylib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="native\x64\libzstd.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="native\x64\libzstd.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
