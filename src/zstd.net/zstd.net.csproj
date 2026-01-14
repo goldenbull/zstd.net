@@ -7,7 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- NuGet Package Metadata -->
-    <PackageId>zstd.nativewrapper</PackageId>
+    <PackageId>zstd.net.multithread</PackageId>
     <Version>0.1.0</Version>
     <Authors>goldenbull</Authors>
     <Company>goldenbull</Company>

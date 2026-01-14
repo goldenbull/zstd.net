@@ -16,6 +16,6 @@ Quite easy.
 
 The offical repo release contains only x86 and x64 DLL for windows, and the multi-thread compression is not enabled in these DLLs, so I build the native library files from source in MacOS, Linux and Windows.
 
-## x86 and arm32 are not supported yet
+## arm32 are not supported yet
 
-But it's quite easy to support, just add the dll/so file to the correct folder inside `native` folder. `NativeLibrary.SetDllImportResolver` is used to search for the native lib file. See [here](https://github.com/goldenbull/zstd.net/blob/830d11bccb93aa17f796465d2db89b03e9cc6a49/src/zstd.net/Zstd_c.cs#L160) for the path lookup logic.
+But it's quite easy to support, just add the .so/.dylib file to the correct folder inside `native` folder. `NativeLibrary.SetDllImportResolver` is used to search for the native lib file. See [here](https://github.com/goldenbull/zstd.net/blob/830d11bccb93aa17f796465d2db89b03e9cc6a49/src/zstd.net/Zstd_c.cs#L160) for the path lookup logic.
